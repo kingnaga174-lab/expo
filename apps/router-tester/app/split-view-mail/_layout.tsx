@@ -1,13 +1,8 @@
-import { useGlobalSearchParams, useRouter } from 'expo-router';
-import {
-  SplitView,
-  type SplitViewHeader,
-  type SplitViewToolbarItem,
-} from 'expo-router/unstable-split-view';
+import { Link, useGlobalSearchParams } from 'expo-router';
+import { SplitView, type SplitViewToolbarItem } from 'expo-router/unstable-split-view';
 import { SymbolView } from 'expo-symbols';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import { PlatformColor, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { SplitHostCommands } from 'react-native-screens/experimental';
 import type { SFSymbol } from 'sf-symbols-typescript';
 
 import { ToggleRow } from '@/components/ToggleRow';
@@ -23,20 +18,11 @@ const MAILBOXES: { name: string; icon: SFSymbol }[] = [
   { name: 'All Mail', icon: 'tray.2' },
 ];
 
-// Applied to every column after the first, whose back button shows when the split view is collapsed.
-const BACK_BUTTONS: { label: string; options: SplitViewHeader }[] = [
-  { label: 'Default', options: {} },
-  { label: 'Custom title', options: { backTitle: 'Back to list' } },
-  { label: 'Hidden', options: { backVisible: false } },
-];
-
 export default function Layout() {
-  const router = useRouter();
   // Navigation does not reveal a column, so the selected column is shown with the split view commands.
-  const splitRef = useRef<SplitHostCommands>(null);
+  const splitRef = useRef<ComponentRef<typeof SplitView>>(null);
   const [collapsed, setCollapsed] = useState(false);
   const { id } = useGlobalSearchParams<{ id?: string }>();
-  const message = MESSAGES.find((m) => m.id === id);
 
   const [showHeaders, setShowHeaders] = useState(true);
   const [alternateTitles, setAlternateTitles] = useState(false);
@@ -47,12 +33,9 @@ export default function Layout() {
   const [threeColumns, setThreeColumns] = useState(true);
   const [showInspector, setShowInspector] = useState(false);
   const [press, setPress] = useState({ title: '', count: 0 });
-  const [search, setSearch] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [buttonStates, setButtonStates] = useState(false);
+  const [disabledArchive, setDisabledArchive] = useState(false);
   const [styledButtons, setStyledButtons] = useState(false);
-  const [backButtonIndex, setBackButtonIndex] = useState(0);
-  const backButton = BACK_BUTTONS[backButtonIndex];
 
   const button = (title: string, icon?: SFSymbol): SplitViewToolbarItem => ({
     title,
@@ -66,7 +49,9 @@ export default function Layout() {
       <SplitView
         ref={splitRef}
         preferredDisplayMode="twoBesideSecondary"
+        topColumnForCollapsing={threeColumns ? 'supplementary' : 'primary'}
         showInspector={showInspector}
+        onInspectorHide={() => setShowInspector(false)}
         onCollapse={() => setCollapsed(true)}
         onExpand={() => setCollapsed(false)}>
         <SplitView.Column
@@ -79,42 +64,36 @@ export default function Layout() {
                   titleStyle: titleColors ? { color: 'red' } : undefined,
                   largeTitleStyle: titleColors ? { color: 'blue' } : undefined,
                   rightToolbar: [button('Edit')],
-                  searchBar: {
-                    placeholder: 'Search mailboxes',
-                    onChangeText: (event) => setSearch(event.nativeEvent.text),
-                  },
                 }
               : undefined
           }>
           <ScrollView contentInsetAdjustmentBehavior="automatic">
-            {MAILBOXES.filter((mailbox) =>
-              mailbox.name.toLowerCase().includes(search.toLowerCase())
-            ).map((mailbox) => (
-              <Pressable
+            {MAILBOXES.map((mailbox) => (
+              <Link
                 key={mailbox.name}
-                style={styles.row}
+                href="/split-view-mail"
+                asChild
                 onPress={() => {
                   // When expanded, `show` would close the sidebar overlay.
                   if (collapsed && threeColumns) splitRef.current?.show('supplementary');
                 }}>
-                <SymbolView name={mailbox.icon} size={20} />
-                <Text style={styles.rowTitle}>{mailbox.name}</Text>
-              </Pressable>
+                <Pressable style={styles.row}>
+                  <SymbolView name={mailbox.icon} size={20} />
+                  <Text style={styles.rowTitle}>{mailbox.name}</Text>
+                </Pressable>
+              </Link>
             ))}
             <View style={styles.controls}>
               <Text style={styles.sectionTitle}>Test cases</Text>
-              <Pressable testID="split-view-mail-home" onPress={() => router.replace('/')}>
-                <Text style={styles.link}>Back to home</Text>
-              </Pressable>
+              <Link testID="split-view-mail-home" href="/" replace style={styles.link}>
+                Back to home
+              </Link>
               <Text testID="split-view-mail-press">Last toolbar press: {pressLabel}</Text>
               <ToggleRow
                 label="Headers"
                 testID="split-view-mail-headers"
                 value={showHeaders}
-                onValueChange={(value) => {
-                  setShowHeaders(value);
-                  setSearch('');
-                }}
+                onValueChange={setShowHeaders}
               />
               <ToggleRow
                 label="Alternate titles"
@@ -147,10 +126,10 @@ export default function Layout() {
                 onValueChange={setIconButtons}
               />
               <ToggleRow
-                label="Selected Unread, disabled Archive"
-                testID="split-view-mail-button-states"
-                value={buttonStates}
-                onValueChange={setButtonStates}
+                label="Disabled Archive"
+                testID="split-view-mail-disabled-archive"
+                value={disabledArchive}
+                onValueChange={setDisabledArchive}
               />
               <ToggleRow
                 label="Styled buttons"
@@ -158,11 +137,6 @@ export default function Layout() {
                 value={styledButtons}
                 onValueChange={setStyledButtons}
               />
-              <Pressable
-                testID="split-view-mail-back-button"
-                onPress={() => setBackButtonIndex((index) => (index + 1) % BACK_BUTTONS.length)}>
-                <Text style={styles.link}>Back button: {backButton.label}</Text>
-              </Pressable>
               <ToggleRow
                 label="Three columns"
                 testID="split-view-mail-three-columns"
@@ -183,8 +157,16 @@ export default function Layout() {
             header={
               showHeaders
                 ? {
-                    ...backButton.options,
                     title: alternateTitles ? 'Gmail' : 'Inbox Gmail',
+                    leftToolbar: [
+                      { ...button('Archive', 'archivebox'), disabled: disabledArchive },
+                      {
+                        ...button('Reply All', 'arrowshape.turn.up.left.2'),
+                        variant: styledButtons ? 'prominent' : undefined,
+                        tintColor: styledButtons ? 'orange' : undefined,
+                        hidesSharedBackground: styledButtons,
+                      },
+                    ],
                     rightToolbar: [
                       {
                         title: 'Filter',
@@ -193,19 +175,16 @@ export default function Layout() {
                           title: 'Filter by',
                           items: [
                             {
-                              title: 'Unread',
+                              title: unreadOnly ? 'All messages' : 'Unread only',
                               icon: 'envelope.badge',
-                              isOn: unreadOnly,
                               onPress: () => {
                                 setUnreadOnly((value) => !value);
                                 setPress((p) => ({ title: 'Unread', count: p.count + 1 }));
                               },
                             },
-                            { title: 'Flagged', icon: 'flag', disabled: true },
                             {
                               title: 'Delete All',
                               icon: 'trash',
-                              destructive: true,
                               onPress: () =>
                                 setPress((p) => ({ title: 'Delete All', count: p.count + 1 })),
                             },
@@ -218,78 +197,33 @@ export default function Layout() {
             }>
             <ScrollView contentInsetAdjustmentBehavior="automatic">
               {MESSAGES.map((m) => (
-                <Pressable
+                <Link
                   key={m.id}
-                  style={[
-                    styles.message,
-                    m.id === id && { backgroundColor: PlatformColor('systemGray5') },
-                  ]}
-                  onPress={() => {
-                    router.replace(`/split-view-mail/${m.id}`);
-                    splitRef.current?.show('secondary');
-                  }}>
-                  <Text style={styles.sender}>{m.sender}</Text>
-                  <Text>{m.subject}</Text>
-                </Pressable>
+                  href={`/split-view-mail/${m.id}`}
+                  // screens v5 cannot replace the root screen of a stack, so the first message is pushed.
+                  push={!id}
+                  replace={!!id}
+                  asChild
+                  onPress={() => splitRef.current?.show('secondary')}>
+                  <Pressable
+                    style={StyleSheet.flatten([
+                      styles.message,
+                      m.id === id && { backgroundColor: PlatformColor('systemGray5') },
+                    ])}>
+                    <Text style={styles.sender}>{m.sender}</Text>
+                    <Text>{m.subject}</Text>
+                  </Pressable>
+                </Link>
               ))}
             </ScrollView>
           </SplitView.Column>
         )}
-        <SplitView.Content
-          header={
-            showHeaders
-              ? {
-                  ...backButton.options,
-                  title: alternateTitles ? 'Message' : (message?.sender ?? 'Mail'),
-                  leftToolbar: [
-                    {
-                      ...button('Unread', 'envelope.badge'),
-                      selected: buttonStates,
-                      badge: styledButtons ? { value: 3 } : undefined,
-                    },
-                  ],
-                  rightToolbar: [
-                    {
-                      ...button('Search', 'magnifyingglass'),
-                      tintColor: styledButtons ? 'orange' : undefined,
-                      separateBackground: styledButtons,
-                      accessibilityLabel: styledButtons ? 'Search messages' : undefined,
-                    },
-                    {
-                      ...button('Move', 'folder'),
-                      badge: styledButtons ? { style: { backgroundColor: 'green' } } : undefined,
-                    },
-                    { ...button('Archive', 'archivebox'), disabled: buttonStates },
-                    {
-                      ...button('Forward', 'arrowshape.turn.up.right'),
-                      hidesSharedBackground: styledButtons,
-                    },
-                    {
-                      ...button('Reply All', 'arrowshape.turn.up.left.2'),
-                      variant: styledButtons ? 'prominent' : undefined,
-                    },
-                  ],
-                }
-              : undefined
-          }
-        />
-        {showInspector && (
-          <SplitView.Inspector
-            header={
-              showHeaders
-                ? {
-                    title: 'Info',
-                    rightToolbar: [
-                      { title: 'Close', icon: 'xmark', onPress: () => setShowInspector(false) },
-                    ],
-                  }
-                : undefined
-            }>
-            <View style={styles.inspector}>
-              <Text>Inspector</Text>
-            </View>
-          </SplitView.Inspector>
-        )}
+        <SplitView.Content stackIntegration />
+        <SplitView.Inspector>
+          <View style={styles.inspector}>
+            <Text>Inspector</Text>
+          </View>
+        </SplitView.Inspector>
       </SplitView>
     </ToolbarPressContext>
   );
