@@ -4,8 +4,7 @@
     "modules": [
       "ExpoHeadModule",
       "LinkPreviewNativeModule",
-      "RouterToolbarModule",
-      "SplitViewModule"
+      "RouterToolbarModule"
     ],
     "appDelegateSubscribers": ["ExpoHeadAppDelegateSubscriber"]
   },
