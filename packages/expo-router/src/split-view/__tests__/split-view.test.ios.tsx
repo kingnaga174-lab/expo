@@ -471,9 +471,18 @@ it('passes the SplitView.Column header to Stack.HeaderConfig', async () => {
             header={{
               title: 'Mailboxes',
               subtitle: '3 unread',
-              largeTitle: true,
-              leftToolbar: [{ title: 'Edit', onPress: () => {} }],
-              rightToolbar: [{ title: 'Search', icon: 'magnifyingglass', onPress: () => {} }],
+              ios: {
+                largeTitleEnabled: true,
+                trailingItems: [
+                  {
+                    type: 'item',
+                    id: 'search',
+                    title: 'Search',
+                    icon: { type: 'sfSymbol', name: 'magnifyingglass' },
+                    onPress: () => {},
+                  },
+                ],
+              },
             }}>
             <Text>Sidebar</Text>
           </SplitView.Column>
@@ -491,11 +500,10 @@ it('passes the SplitView.Column header to Stack.HeaderConfig', async () => {
     subtitle: '3 unread',
     ios: {
       largeTitleEnabled: true,
-      leadingItems: [{ type: 'item', id: 'left.0', title: 'Edit', onPress: expect.any(Function) }],
       trailingItems: [
         {
           type: 'item',
-          id: 'right.0',
+          id: 'search',
           title: 'Search',
           icon: { type: 'sfSymbol', name: 'magnifyingglass' },
           onPress: expect.any(Function),
@@ -525,267 +533,13 @@ it('passes no props to Stack.HeaderConfig for a SplitView.Column without header'
   expect(jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0]).toEqual({});
 });
 
-it('passes the title colors of the SplitView.Column header to both header appearances', async () => {
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              title: 'Inbox',
-              titleStyle: { color: 'red' },
-              largeTitleStyle: { color: 'blue' },
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column.
-  const { ios } = jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0];
-  expect(ios).toHaveProperty('standardAppearance', {
-    titleFontColor: 'red',
-    largeTitleFontColor: 'blue',
-  });
-  expect(ios).toHaveProperty('scrollEdgeAppearance', {
-    titleFontColor: 'red',
-    largeTitleFontColor: 'blue',
-  });
-});
-
-it('uses the title color for the large title when largeTitleStyle has no color', async () => {
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column header={{ title: 'Inbox', titleStyle: { color: 'red' } }} />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column.
-  const { ios } = jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0];
-  expect(ios).toHaveProperty('standardAppearance', {
-    titleFontColor: 'red',
-    largeTitleFontColor: 'red',
-  });
-});
-
-it('passes the toolbar item menu to Stack.HeaderConfig without the item onPress', async () => {
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              rightToolbar: [
-                {
-                  title: 'Filter',
-                  icon: 'line.3.horizontal.decrease.circle',
-                  onPress: () => {},
-                  menu: {
-                    title: 'Filter by',
-                    items: [
-                      { title: 'Unread', icon: 'envelope.badge', onPress: () => {} },
-                      { title: 'Flagged' },
-                    ],
-                  },
-                },
-              ],
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column.
-  expect(jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0].ios!.trailingItems).toEqual([
-    {
-      type: 'item',
-      id: 'right.0',
-      title: 'Filter',
-      icon: { type: 'sfSymbol', name: 'line.3.horizontal.decrease.circle' },
-      menu: {
-        type: 'menu',
-        id: 'right.0.menu',
-        title: 'Filter by',
-        children: [
-          {
-            type: 'menuItem',
-            id: 'right.0.0',
-            title: 'Unread',
-            icon: { type: 'sfSymbol', name: 'envelope.badge' },
-            onPress: expect.any(Function),
-          },
-          { type: 'menuItem', id: 'right.0.1', title: 'Flagged' },
-        ],
-      },
-    },
-  ]);
-});
-
-it('calls onPress of the pressed toolbar item', async () => {
-  const onEditPress = jest.fn();
-  const onArchivePress = jest.fn();
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              rightToolbar: [
-                { title: 'Edit', onPress: onEditPress },
-                { title: 'Archive', onPress: onArchivePress },
-              ],
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column. The items are inline items, so they have `onPress`.
-  const items = jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0].ios!.trailingItems as {
-    onPress: () => void;
-  }[];
-  items[1]!.onPress();
-
-  expect(onArchivePress).toHaveBeenCalledTimes(1);
-  expect(onEditPress).not.toHaveBeenCalled();
-});
-
-it('calls onPress of the pressed menu action', async () => {
-  const onUnreadPress = jest.fn();
-  const onFlaggedPress = jest.fn();
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              leftToolbar: [
-                {
-                  title: 'Filter',
-                  menu: {
-                    items: [
-                      { title: 'Unread', onPress: onUnreadPress },
-                      { title: 'Flagged', onPress: onFlaggedPress },
-                    ],
-                  },
-                },
-              ],
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column. The menu has only menu items, so they have `onPress`.
-  const items = jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0].ios!.leadingItems as {
-    menu: { children: { onPress: () => void }[] };
-  }[];
-  items[0]!.menu.children[1]!.onPress();
-
-  expect(onFlaggedPress).toHaveBeenCalledTimes(1);
-  expect(onUnreadPress).not.toHaveBeenCalled();
-});
-
-it('passes the variant of toolbar items to Stack.HeaderConfig with done as prominent', async () => {
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              rightToolbar: [
-                { title: 'Cancel', variant: 'plain' },
-                { title: 'Done', variant: 'done' },
-                { title: 'Send', variant: 'prominent' },
-              ],
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column.
-  expect(jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0].ios!.trailingItems).toEqual([
-    { type: 'item', id: 'right.0', title: 'Cancel', variant: 'plain' },
-    { type: 'item', id: 'right.1', title: 'Done', variant: 'prominent' },
-    { type: 'item', id: 'right.2', title: 'Send', variant: 'prominent' },
-  ]);
-});
-
-it('passes tintColor, hidesSharedBackground, disabled and an xcasset icon of toolbar items to Stack.HeaderConfig', async () => {
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              rightToolbar: [
-                {
-                  title: 'Logo',
-                  icon: { xcasset: 'logo' },
-                  tintColor: 'red',
-                  hidesSharedBackground: true,
-                  disabled: true,
-                },
-              ],
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  // The first Stack.HeaderConfig is in the sidebar column.
-  expect(jest.mocked(StackV5.HeaderConfig).mock.calls[0]![0].ios!.trailingItems).toEqual([
-    {
-      type: 'item',
-      id: 'right.0',
-      title: 'Logo',
-      icon: { type: 'xcasset', name: 'logo' },
-      tintColor: 'red',
-      hidesSharedBackground: true,
-      disabled: true,
-    },
-  ]);
-});
-
 it('passes the SplitView.Content header to Stack.HeaderConfig in the content column', async () => {
   await renderRouter(
     {
       _layout: () => (
         <SplitView>
           <SplitView.Column />
-          <SplitView.Content header={{ title: 'Message' }} />
+          <SplitView.Content header={{ title: 'Message', hidden: true }} />
         </SplitView>
       ),
       index: () => <Text>Index</Text>,
@@ -796,42 +550,8 @@ it('passes the SplitView.Content header to Stack.HeaderConfig in the content col
   // The first Stack.HeaderConfig is in the sidebar column. The second is in the content column.
   expect(jest.mocked(StackV5.HeaderConfig).mock.calls[1]![0]).toEqual({
     title: 'Message',
-    ios: {},
+    hidden: true,
   });
-});
-
-it('warns about header fields that react-native-screens 5 does not support', async () => {
-  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  await renderRouter(
-    {
-      _layout: () => (
-        <SplitView>
-          <SplitView.Column
-            header={{
-              searchBar: { placeholder: 'Search' },
-              backTitle: 'Back',
-              rightToolbar: [
-                {
-                  title: 'Inbox',
-                  badge: { value: 3 },
-                  selected: true,
-                  menu: { items: [{ title: 'Unread', isOn: true }] },
-                },
-              ],
-            }}
-          />
-          <SplitView.Content />
-        </SplitView>
-      ),
-      index: () => <Text>Index</Text>,
-    },
-    { initialUrl: '/' }
-  );
-
-  expect(warn).toHaveBeenCalledWith(
-    'SplitView ignores these header fields, because react-native-screens 5 does not support them: searchBar, backTitle, badge, selected, isOn. Remove them from the SplitView headers.'
-  );
-  warn.mockRestore();
 });
 
 it('does not render the SplitView.Inspector header and warns about it', async () => {

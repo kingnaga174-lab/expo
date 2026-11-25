@@ -12,7 +12,6 @@ import {
   SplitViewContent,
   SplitViewInspector,
 } from './elements';
-import { getUnsupportedHeaderFields } from './header';
 
 /**
  * For full list of supported props, see [`SplitHostProps`](http://github.com/software-mansion/react-native-screens/blob/main/src/components/gamma/split/SplitHost.types.ts#L117)
@@ -57,19 +56,11 @@ function SplitViewNavigator({
   const numberOfSidebars = columnChildren.length;
   const numberOfInspectors = inspectorChildren.length;
   const contentProps = contentChildren[0]?.props;
-  const unsupportedHeaderFields = getUnsupportedHeaderFields([
-    ...columnChildren.map((child) => child.props.header),
-    contentProps?.stackIntegration ? undefined : contentProps?.header,
-  ]);
   // Hooks must run before the early returns below, so the guards repeat their conditions.
   const isIOS = process.env.EXPO_OS === 'ios';
   useWarnOnce(
     'SplitView.Content is missing. Add <SplitView.Content /> to SplitView to configure the content column.',
     isIOS && numberOfSidebars + numberOfInspectors > 0 && contentChildren.length === 0
-  );
-  useWarnOnce(
-    `SplitView ignores these header fields, because react-native-screens 5 does not support them: ${unsupportedHeaderFields.join(', ')}. Remove them from the SplitView headers.`,
-    isIOS && unsupportedHeaderFields.length > 0
   );
   useWarnOnce(
     'SplitView.Inspector ignores the header prop, because react-native-screens 5 does not support a header in the inspector. Remove header from SplitView.Inspector.',
