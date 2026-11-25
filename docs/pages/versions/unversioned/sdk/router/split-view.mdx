@@ -15,6 +15,7 @@ import { BoxLink } from '~/ui/components/BoxLink';
 import { Collapsible } from '~/ui/components/Collapsible';
 import { ContentSpotlight } from '~/ui/components/ContentSpotlight';
 import { FileTree } from '~/ui/components/FileTree';
+import { Terminal } from '~/ui/components/Snippet';
 
 > **important** SplitView is an [alpha](/more/release-statuses/#alpha) API available on **iOS only** in **Expo SDK 55** and later. The API is subject to breaking changes and is not ready for production usage yet.
 
@@ -81,13 +82,19 @@ There can only be one `SplitView` in the navigation hierarchy. Attempting to nes
 
 <Collapsible summary="Only specific children allowed">
 
-`SplitView` only accepts `SplitView.Column` and `SplitView.Inspector` as direct children. Other components will be ignored with a warning.
+`SplitView` only accepts `SplitView.Column`, `SplitView.Content`, and `SplitView.Inspector` as direct children. Other components will be ignored with a warning.
 
 </Collapsible>
 
 <Collapsible summary="Some header options are not supported">
 
-The `header` prop does not support the search bar, badges, the selected state, accessibility labels and hints, separate backgrounds, the icon rendering mode, back button options, and the destructive, disabled, and checked states of menu actions. `SplitView` ignores these options and logs a warning.
+On iOS, `SplitView` ignores the following props with `react-native-screens` 5 and logs a warning only in development builds.
+
+- Header: `searchBar`, `backTitle`, and `backVisible`.
+- Toolbar item: `badge`, `selected`, `separateBackground`, `iconRenderingMode`, `accessibilityLabel`, and `accessibilityHint`.
+- Menu action: `destructive`, `disabled`, and `isOn`.
+
+Toolbar items support `disabled`.
 
 </Collapsible>
 
@@ -118,9 +125,14 @@ To use `expo-router/unstable-split-view` in your project, you need to install `e
 
 `SplitView` requires `react-native-screens` 5.0.0-beta.2 or later. With an earlier version, `SplitView` throws an error. Install it with:
 
-```sh
-npx expo install react-native-screens@5.0.0-beta.2
-```
+<Terminal
+  cmd={{
+    npm: ['$ npx expo install react-native-screens@5.0.0-beta.2'],
+    yarn: ['$ yarn expo install react-native-screens@5.0.0-beta.2'],
+    pnpm: ['$ pnpm expo install react-native-screens@5.0.0-beta.2'],
+    bun: ['$ bun expo install react-native-screens@5.0.0-beta.2'],
+  }}
+/>
 
 ## Using `SplitView.Column`
 
@@ -267,7 +279,7 @@ Use the `header` prop of `SplitView.Column` and `SplitView.Content` to show a ti
 </SplitView>
 ```
 
-`SplitView.Inspector` does not support `header`. `SplitView` ignores it and logs a warning.
+`SplitView.Inspector` does not support `header`. `SplitView` ignores it and logs a warning only in development builds.
 
 ## Navigation stack in the content column
 
@@ -304,6 +316,8 @@ export default function ContentLayout() {
 ```
 
 With `stackIntegration`, the content column ignores `header` and does not apply the horizontal safe area insets.
+
+> **important** With `react-native-screens` 5.0.0-beta.2, replacing the only screen in the content stack with `<Link replace>` can crash an iOS debug build. See [react-native-screens issue #5340](https://github.com/software-mansion/react-native-screens/issues/5340).
 
 ## Using `SplitView.Inspector`
 
