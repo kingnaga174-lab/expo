@@ -42,15 +42,13 @@ Accepted values are `primary`, `supplementary`, and `secondary`. When not set, t
 
 ### Navigating between columns
 
-> **info** The `.show()` method requires `react-native-screens` 4.24.0 or later. SDK 55 bundles `~4.23.0`, so you need to install `react-native-screens@~4.24.0` manually to use this feature.
-
 Use a `ref` to programmatically show a specific column with the `show` method:
 
 ```tsx
 import { useRef } from 'react';
 import { Pressable, Text } from 'react-native';
 import { SplitView } from 'expo-router/unstable-split-view';
-import type { SplitHostCommands } from 'react-native-screens/experimental';
+import type { SplitHostCommands } from 'react-native-screens';
 
 export default function Layout() {
   const ref = useRef<SplitHostCommands>(null);
@@ -87,9 +85,9 @@ There can only be one `SplitView` in the navigation hierarchy. Attempting to nes
 
 </Collapsible>
 
-<Collapsible summary="Header cannot be customized yet">
+<Collapsible summary="Some header options are not supported">
 
-The header (navigation bar) within split view columns cannot be customized. Custom header configurations are not yet supported.
+The `header` prop does not support the search bar, badges, the selected state, accessibility labels and hints, separate backgrounds, the icon rendering mode, back button options, and the destructive, disabled, and checked states of menu actions. `SplitView` ignores these options and logs a warning.
 
 </Collapsible>
 
@@ -117,6 +115,12 @@ To use `expo-router/unstable-split-view` in your project, you need to install `e
   href="/router/installation/"
   Icon={RouterLogo}
 />
+
+`SplitView` requires `react-native-screens` 5.0.0-beta.2 or later. With an earlier version, `SplitView` throws an error. Install it with:
+
+```sh
+npx expo install react-native-screens@5.0.0-beta.2
+```
 
 ## Using `SplitView.Column`
 
@@ -244,6 +248,62 @@ export default function Layout() {
   );
 }
 ```
+
+## Column headers
+
+Use the `header` prop of `SplitView.Column` and `SplitView.Content` to show a title and toolbar buttons in the navigation bar of the column:
+
+```tsx app/_layout.tsx
+<SplitView>
+  <SplitView.Column
+    header={{
+      title: 'Mailboxes',
+      largeTitle: true,
+      rightToolbar: [{ title: 'Edit', onPress: () => {} }],
+    }}>
+    {/* Mailbox list */}
+  </SplitView.Column>
+  <SplitView.Content header={{ title: 'Mail' }} />
+</SplitView>
+```
+
+`SplitView.Inspector` does not support `header`. `SplitView` ignores it and logs a warning.
+
+## Navigation stack in the content column
+
+Set `stackIntegration` on `SplitView.Content` to navigate the content column with an `ExperimentalStack`. The layout of the content route must render the stack as its root. The stack then pushes screens in the content column, and its header is the navigation bar of the column:
+
+<FileTree
+  files={[
+    'app/_layout.tsx',
+    'app/(content)/_layout.tsx',
+    'app/(content)/index.tsx',
+    'app/(content)/[id].tsx',
+  ]}
+/>
+
+```tsx app/_layout.tsx
+import { SplitView } from 'expo-router/unstable-split-view';
+
+export default function Layout() {
+  return (
+    <SplitView>
+      <SplitView.Column>{/* Message list */}</SplitView.Column>
+      <SplitView.Content stackIntegration />
+    </SplitView>
+  );
+}
+```
+
+```tsx app/(content)/_layout.tsx
+import { ExperimentalStack as Stack } from 'expo-router';
+
+export default function ContentLayout() {
+  return <Stack />;
+}
+```
+
+With `stackIntegration`, the content column ignores `header` and does not apply the horizontal safe area insets.
 
 ## Using `SplitView.Inspector`
 
