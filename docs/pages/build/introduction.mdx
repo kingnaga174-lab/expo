@@ -1,171 +1,272 @@
----
-title: Expo Build
-sidebar_title: Introduction
-description: Expo Build is a hosted service for building app binaries for your Expo and React Native projects.
----
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, SafeAreaView } from 'react-native';
 
-import { Cube01Icon } from '@expo/styleguide-icons/outline/Cube01Icon';
+const REF = {
+  male:     { n: 'Male',     hb: [13, 17],   pcv: [40, 50], wbc: [4000, 11000], mcv: [80, 100] },
+  female:   { n: 'Female',   hb: [12, 15.5], pcv: [36, 46], wbc: [4000, 11000], mcv: [80, 100] },
+  pregnant: { n: 'Pregnant', hb: [11, 14.5], pcv: [33, 44], wbc: [5000, 14000], mcv: [80, 100] },
+  child:    { n: 'Child',    hb: [11, 15],   pcv: [34, 44], wbc: [5000, 15500], mcv: [75, 92] },
+  infant:   { n: 'Infant',   hb: [10.5, 13.5], pcv: [33, 41], wbc: [6000, 17500], mcv: [70, 86] },
+};
 
-import { BoxLink } from '~/ui/components/BoxLink';
-import { Collapsible } from '~/ui/components/Collapsible';
-import { NoIcon, YesIcon } from '~/ui/components/DocIcons';
-import { FAQ } from '~/ui/components/FAQ';
-import { RelatedSkills } from '~/ui/components/RelatedSkills';
-import { SimulatorsLaunchCallout } from '~/ui/components/SimulatorsLaunchCallout';
-import { Terminal } from '~/ui/components/Snippet';
+const EMPTY = { hb: '', pcv: '', rbc: '', mcv: '', wbc: '', neut: '', lymph: '', eos: '', plt: '' };
 
-**Expo Build** is a hosted service that builds app binaries (also called [standalone apps](/more/glossary-of-terms/#standalone-app)) for your Expo and React Native projects.
+const num = (v) => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = parseFloat(String(v).replace(/,/g, '').trim());
+  return isNaN(n) ? null : n;
+};
 
-Expo Build makes building your apps for distribution simple and easy to automate by providing defaults that work well for Expo and React Native projects out of the box, and by handling your app signing credentials for you (if you wish). It also makes sharing builds with your team easier than ever with [internal distribution](/build/internal-distribution/) (using [ad hoc](/build/internal-distribution/) and/or enterprise "universal" provisioning), deeply integrates with Expo Submit for app store submissions, and has first-class support for the [`expo-updates`](/build/updates/) library.
+const fmt = (n) => (n === null ? '--' : String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
 
-Expo Build is also designed to work for any native project, whether or not you use Expo and React Native. It's the fastest way to get from `npx create-expo-app` or `npx @react-native-community/cli@latest init` to app stores.
+function parseText(raw) {
+  const t = raw.replace(/(\d),(?=\d)/g, '$1');
+  const get = (re) => { const m = t.match(re); return m ? m[1] : ''; };
+  let wbc = num(get(/(?:tlc|wbc|total\s*leuc?k?ocyte)[^0-9\n]{0,25}(\d+(?:\.\d+)?)/i));
+  if (wbc !== null && wbc < 100) wbc = Math.round(wbc * 1000);
+  let plt = '';
+  const pm = t.match(/(?:platelet|plt)[^0-9\n]{0,25}(\d+(?:\.\d+)?)([^\n]{0,15})/i);
+  if (pm) {
+    let p = parseFloat(pm[1]);
+    const u = (pm[2] || '').toLowerCase();
+    if (!isNaN(p)) {
+      if (u.indexOf('lakh') > -1 || u.indexOf('lac') > -1 || p < 10) p = Math.round(p * 100000);
+      else if (p < 1000) p = Math.round(p * 1000);
+      plt = String(p);
+    }
+  }
+  return {
+    hb: get(/(?:ha?emoglobin|\bhb\b)(?!\s*a1c)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    pcv: get(/(?:pcv|hct|ha?ematocrit|packed\s*cell)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    rbc: get(/(?:\brbc\b|red\s*blood)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    mcv: get(/(?:\bmcv\b|mean\s*corpuscular\s*vol)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    wbc: wbc !== null ? String(wbc) : '',
+    neut: get(/(?:neutrophil|polymorph)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    lymph: get(/(?:lymphocyte)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    eos: get(/(?:eosinophil)[^0-9\n]{0,20}(\d+(?:\.\d+)?)/i),
+    plt,
+  };
+}
 
-<SimulatorsLaunchCallout />
+function analyze(raw, ctx) {
+  const r = REF[ctx.group];
+  const hb = num(raw.hb), pcv = num(raw.pcv), rbc = num(raw.rbc), mcv = num(raw.mcv);
+  const wbc = num(raw.wbc), neut = num(raw.neut), lymph = num(raw.lymph), eos = num(raw.eos), plt = num(raw.plt);
+  const chk = (v, lo, hi, plo, phi) =>
+    v === null ? '' : plo && v < plo ? 'PANIC LOW' : phi && v > phi ? 'PANIC HIGH' : v < lo ? 'LOW' : v > hi ? 'HIGH' : 'OK';
 
-## Quick start
+  const flags = {
+    hb: chk(hb, r.hb[0], r.hb[1], 7, 20),
+    pcv: chk(pcv, r.pcv[0], r.pcv[1], 21, 60),
+    wbc: chk(wbc, r.wbc[0], r.wbc[1], 2000, 30000),
+    mcv: chk(mcv, r.mcv[0], r.mcv[1]),
+    plt: chk(plt, 150000, 450000, 50000, 1000000),
+  };
 
-> **info** The commands for Expo Build start with `eas` and require EAS CLI. See [How to install EAS CLI](/eas/cli/#installation) for more information.
+  const anc = wbc !== null && neut !== null ? Math.round((wbc * neut) / 100) : null;
+  const aec = wbc !== null && eos !== null ? Math.round((wbc * eos) / 100) : null;
+  const nlr = neut !== null && lymph ? (neut / lymph).toFixed(2) : '--';
+  const mentzer = mcv !== null && rbc ? (mcv / rbc).toFixed(1) : '--';
 
-To build your app, run the following command:
+  const panics = [];
+  const notes = [];
+  if (plt !== null && plt < 50000) panics.push('CRITICAL LOW PLATELETS (' + fmt(plt) + '/uL): High bleed risk. Avoid NSAIDs & IM shots; monitor urgently.');
+  if (hb !== null && hb < 7) panics.push('SEVERE ANEMIA (Hb ' + hb + '): Assess stability, active bleeding, or transfusion need.');
+  if (anc !== null && anc < 500) panics.push('SEVERE NEUTROPENIA (ANC ' + fmt(anc) + '): High sepsis risk; urgent care.');
+  if (aec !== null && aec > 1500) panics.push('HYPEREOSINOPHILIA (AEC ' + fmt(aec) + '): Screen DRESS syndrome, LFT, RFT.');
 
-<Terminal cmd={['$ eas build --platform all']} />
+  if (plt !== null && plt < 150000) {
+    if (ctx.fever || ctx.day3) {
+      notes.push({
+        lvl: plt < 50000 ? 'p' : 'w',
+        t: pcv > r.pcv[1] ? 'Febrile Low Platelets + High PCV (Strong Dengue Sign)' : 'Febrile Thrombocytopenia',
+        b: 'Suggests Dengue, Scrub Typhus, Malaria, or Viral Fever. Watch for warning signs (bleeding, vomiting, abdominal pain).',
+        nx: 'Dengue NS1 (D1-5) / IgM (D5+) • Scrub IgM • Malaria • AST/ALT',
+      });
+    } else if (ctx.drug || ctx.rash) {
+      notes.push({
+        lvl: 'w',
+        t: 'Suspected Drug-Induced Thrombocytopenia (DITP)',
+        b: 'Stop suspected drug (e.g., ceftriaxone) immediately and verify count on peripheral smear.',
+        nx: 'Manual Smear (rule out clumping) • Urine Routine • Creatinine',
+      });
+    } else {
+      notes.push({
+        lvl: 'w',
+        t: 'Isolated Low Platelets — Verify First',
+        b: 'Rule out lab EDTA platelet clumping before treating if patient has no fever or bleeding.',
+        nx: 'Manual Peripheral Smear • Repeat in Citrate Tube',
+      });
+    }
+  }
 
-This command sends your project to Expo Build and produces installable binaries for Android and iOS. You can also build for one platform at a time by passing in `--platform android` or `--platform ios` as desired. For complete setup instructions, see [Create your first build](/build/setup/).
+  if (ctx.rash && ctx.drug && (plt === null || plt >= 150000)) {
+    notes.push({
+      lvl: 'w',
+      t: 'Drug Skin Reaction with Normal Platelets',
+      b: 'Raised purple spots on legs/hands suggest cutaneous vasculitis; flat sharp dusky plaques suggest Fixed Drug Eruption.',
+      nx: 'Urine Routine (RBCs/protein) • Creatinine • AST/ALT',
+    });
+  }
 
-### Expo Skills for AI agents
+  if (hb !== null && hb < r.hb[0]) {
+    if (mcv !== null && mcv < r.mcv[0]) {
+      const thal = mentzer !== '--' && parseFloat(mentzer) < 13;
+      notes.push({
+        lvl: hb < 7 ? 'p' : 'w',
+        t: thal ? 'Microcytic Anemia — Thalassemia Trait Likely (Mentzer ' + mentzer + ')' : 'Microcytic Anemia — Iron Deficiency Likely',
+        b: thal ? 'Confirm with HPLC before giving empiric iron.' : 'Suggests iron deficiency or chronic disease.',
+        nx: 'Serum Ferritin • Iron/TIBC • HPLC • Peripheral Smear',
+      });
+    } else if (mcv !== null && mcv > r.mcv[1]) {
+      notes.push({ lvl: 'w', t: 'Macrocytic Anemia', b: 'Commonly B12/Folate deficiency, liver disease, or hypothyroidism.', nx: 'Vitamin B12 • Folate • LFT • TSH' });
+    } else {
+      notes.push({ lvl: hb < 7 ? 'p' : 'w', t: 'Normocytic Anemia', b: 'Check acute bleed, chronic inflammation, or renal cause.', nx: 'Retic Count • Smear • Creatinine' });
+    }
+  }
 
-If you use an AI agent, install [Expo Skills](/skills/) to teach it how to create production builds and ship them to the app stores:
+  if (wbc !== null && wbc > r.wbc[1] && anc !== null && anc > 7500) {
+    notes.push({ lvl: 'w', t: 'Neutrophilic Leukocytosis', b: 'High WBC (' + fmt(wbc) + ') & ANC (' + fmt(anc) + ') favors bacterial infection or steroid use.', nx: 'CRP • Cultures • Smear' });
+  }
 
-<RelatedSkills names={['eas-app-stores']} />
+  const hasVal = Object.keys(raw).some((k) => raw[k] !== '');
+  if (hasVal && !panics.length && !notes.length) {
+    notes.push({ lvl: 'i', t: 'No Acute CBC Red Flags', b: 'Entered parameters are within range for this patient group.', nx: '' });
+  }
+  return { flags, anc, aec, nlr, mentzer, panics, notes, hasVal };
+}
 
-## Key features
+export default function App() {
+  const [cbc, setCbc] = useState(EMPTY);
+  const [txt, setTxt] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
+  const [ctx, setCtx] = useState({ group: 'female', fever: false, day3: false, rash: false, drug: false });
+  const res = analyze(cbc, ctx);
 
-- Cloud builds for Android and iOS with consistent environments
-- Automatically provision and manage app signing credentials or use your own
-- Share [internal distribution](/build/internal-distribution/) builds with a URL
-- Automate builds with [build profiles](/build/eas-json/#build-profiles) in **eas.json** (named sets of build settings) and integrations with [Expo Workflows](/eas/workflows/get-started/) or [CI pipelines](/build/building-on-ci/)
-- Auto-submit successful builds to app stores via [`--auto-submit`](/build/automate-submissions/) and Expo Submit
-- First-class [`expo-updates` integration](/build/updates/) with per-profile channels and [runtime version](/eas-update/runtime-versions/) guidance
-- Reuse [development builds](/develop/development-builds/introduction/) across your team. When two team members run `eas build:dev` and the project fingerprint matches, the existing build is downloaded from Expo Build instead of creating a new one
-- Faster builds via [dependency caching and custom cache paths](/build-reference/caching/)
-- Install builds and updates on devices with [Expo Orbit](https://expo.dev/orbit)
+  const runParse = () => {
+    const p = parseText(txt);
+    const n = Object.keys(p).filter((k) => p[k] !== '').length;
+    if (!n) return Alert.alert('No values found', 'Include names like Hb, WBC, Platelets with numbers.');
+    setCbc(p);
+    setShowPaste(false);
+  };
 
-## When to use Expo Build
+  const sample = () => {
+    setCbc({ hb: '14.8', pcv: '47.5', rbc: '5.1', mcv: '88', wbc: '3100', neut: '42', lymph: '50', eos: '2', plt: '42000' });
+    setCtx({ group: 'female', fever: true, day3: true, rash: true, drug: true });
+  };
 
-| Scenario                                                                             | Recommendation |
-| ------------------------------------------------------------------------------------ | -------------- |
-| Build production-ready binaries for app stores                                       | <YesIcon />    |
-| Share builds with testers via [internal distribution](/build/internal-distribution/) | <YesIcon />    |
-| Consistent builds across team members without local environment setup                | <YesIcon />    |
-| Automate builds from CI or [Expo Workflows](/eas/workflows/get-started/)             | <YesIcon />    |
-| Managed app signing credentials                                                      | <YesIcon />    |
-| Debugging native code locally                                                        | <NoIcon />     |
+  return (
+    <SafeAreaView style={s.bg}>
+      <ScrollView contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
+        <Text style={s.h1}>CBC Clinical Guide</Text>
+        <Text style={s.sub}>Indian OPD Analyzer • Offline Live Text Reader</Text>
 
-## Frequently asked questions
+        <View style={s.row}>
+          <TouchableOpacity style={[s.btn, s.b1]} onPress={() => setShowPaste(!showPaste)}>
+            <Text style={s.bt}>{showPaste ? 'Hide Paste' : 'Paste Report Text'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.btn, s.b2]} onPress={sample}>
+            <Text style={s.bt}>Sample Case</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.btn, s.b3]} onPress={() => { setCbc(EMPTY); setTxt(''); }}>
+            <Text style={s.bt}>Clear</Text>
+          </TouchableOpacity>
+        </View>
 
-<FAQ>
+        {showPaste && (
+          <View style={s.box}>
+            <Text style={s.lbl}>Snap report in Camera → Copy via Live Text → Paste here:</Text>
+            <TextInput style={s.area} multiline value={txt} onChangeText={setTxt} placeholder="Hb 12.4, WBC 3400, Platelets 1.1 Lakhs..." />
+            <TouchableOpacity style={[s.btn, s.b1, { marginRight: 0 }]} onPress={runParse}>
+              <Text style={s.bt}>Auto-Extract & Analyze</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-<Collapsible summary="How do I share builds with my team before submitting to app stores?">
+        <Text style={s.sec}>1. Patient Group</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {Object.keys(REF).map((g) => (
+            <TouchableOpacity key={g} style={[s.ch, ctx.group === g && s.chOn]} onPress={() => setCtx({ ...ctx, group: g })}>
+              <Text style={[s.ct, ctx.group === g && s.ctOn]}>{REF[g].n}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-Use [internal distribution](/build/internal-distribution/) to share builds with a URL. Set `"distribution": "internal"` in your [build profile](/build/eas-json/#build-profiles) in **eas.json** to generate installable Android Package (APK) files for Android or [ad hoc builds](/build/internal-distribution/) for iOS.
+        <Text style={s.sec}>2. Symptoms</Text>
+        <View style={s.wrap}>
+          {[['fever', 'Fever'], ['day3', 'Day 3+'], ['rash', 'Rash/Purple'], ['drug', 'Recent Drug']].map((x) => (
+            <TouchableOpacity key={x[0]} style={[s.ch, ctx[x[0]] && s.chOn]} onPress={() => setCtx({ ...ctx, [x[0]]: !ctx[x[0]] })}>
+              <Text style={[s.ct, ctx[x[0]] && s.ctOn]}>{x[1]}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-</Collapsible>
+        <Text style={s.sec}>3. CBC Values</Text>
+        <View style={s.grid}>
+          {[['hb','Hb (g/dL)'],['pcv','PCV (%)'],['wbc','WBC (/uL)'],['plt','Platelets (/uL)'],['mcv','MCV (fL)'],['rbc','RBC (M/uL)'],['neut','Neut (%)'],['lymph','Lymph (%)'],['eos','Eos (%)']].map((f) => {
+            const fl = res.flags[f[0]];
+            const bad = fl && fl !== 'OK';
+            return (
+              <View key={f[0]} style={[s.cell, bad && s.cellBad]}>
+                <Text style={[s.lbl, bad && { color: '#B91C1C' }]}>{f[1]} {bad ? '[' + fl + ']' : ''}</Text>
+                <TextInput style={s.inp} keyboardType="decimal-pad" placeholder="--" value={cbc[f[0]]} onChangeText={(v) => setCbc({ ...cbc, [f[0]]: v })} />
+              </View>
+            );
+          })}
+        </View>
 
-<Collapsible summary="Can I use Expo Build with existing React Native projects?">
+        {res.hasVal && (
+          <View style={{ marginTop: 8 }}>
+            {res.panics.map((m, i) => <View key={i} style={s.panic}><Text style={s.bt}>ALERT: {m}</Text></View>)}
+            <View style={s.der}>
+              <Text style={s.dt}>ANC: {fmt(res.anc)}  •  AEC: {fmt(res.aec)}  •  NLR: {res.nlr}  •  Mentzer: {res.mentzer}</Text>
+            </View>
+            <Text style={s.sec}>4. Clinical Guidance</Text>
+            {res.notes.map((n, i) => (
+              <View key={i} style={[s.card, n.lvl === 'p' ? s.cp : n.lvl === 'w' ? s.cw : s.ci]}>
+                <Text style={s.nt}>{n.t}</Text>
+                <Text style={s.nb}>{n.b}</Text>
+                {!!n.nx && <Text style={s.nx}>Next: {n.nx}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
-Yes. Expo Build works with existing React Native projects created with `npx react-native init` or similar tools. See [Overview of using Expo with existing React Native apps](/bare/overview/) for more information.
-
-</Collapsible>
-
-<Collapsible summary="Does Expo Build handle app signing credentials?">
-
-Yes. Expo Build can generate and manage Android [keystores](/app-signing/app-credentials/#android), iOS [provisioning profiles](/app-signing/app-credentials/#ios) and [distribution certificates](/app-signing/app-credentials/#ios), or use credentials you provide. See [App signing credentials](/app-signing/app-credentials/) for more information.
-
-</Collapsible>
-
-<Collapsible summary="Can I run builds locally instead of in the cloud?">
-
-Yes. Use [local builds](/build-reference/local-builds/) with `eas build --local` to run builds on your machine. This is useful for debugging or for security policies that require local builds.
-
-</Collapsible>
-
-<Collapsible summary="Can I use Expo Build with Expo Workflows or CI pipelines?">
-
-Yes. Expo Build integrates with [Expo Workflows](/eas/workflows/get-started/) using the `build` job type. Add a build job to your workflow configuration, for example:
-
-```yaml
-jobs:
-  build_ios:
-    type: build
-    params:
-      platform: ios
-```
-
-The build job supports builds for both platforms or conditional builds based on the branch:
-
-```yaml
-jobs:
-  build:
-    type: build
-    params:
-      platform: all
-      profile: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
-```
-
-For more information and other usage examples, see the [Expo Workflows build job](/eas/workflows/pre-packaged-jobs#build).
-
-Expo Build supports [builds from GitHub](/build/building-from-github/) and [building on CI](/build/building-on-ci/) with any provider.
-
-</Collapsible>
-
-<Collapsible summary="What build server infrastructure does Expo Build use?">
-
-Android builds run on Linux runners hosted in Google Cloud Platform, and iOS builds run on macOS runners hosted in Expo's macOS cloud. See [Build server infrastructure](/build-reference/infrastructure/).
-
-</Collapsible>
-
-</FAQ>
-
-## Get started
-
-<BoxLink
-  title="Create your first build"
-  description="It should only take a few minutes in total to get up and running for iOS and/or Android."
-  href="/build/setup"
-  Icon={Cube01Icon}
-/>
-
-<BoxLink
-  title="Share your apps with internal testers"
-  description="Expo Build can help share preview builds of your app with a single URL."
-  href="/build/internal-distribution"
-  Icon={Cube01Icon}
-/>
-
-<BoxLink
-  title="Automate submissions"
-  description="Learn how Expo Build can take your successful builds and handle uploading them to app stores automatically."
-  href="/build/automate-submissions"
-  Icon={Cube01Icon}
-/>
-
-<BoxLink
-  title="App version management"
-  description="Automate version bumps so you never have to think about them again."
-  href="/build-reference/app-versions"
-  Icon={Cube01Icon}
-/>
-
-<BoxLink
-  title="Run builds locally or on your own infrastructure"
-  description="Expo Build is a hosted service, and it can also run on your own machine, for example, to debug or to comply with company security policies."
-  href="/build-reference/local-builds"
-  Icon={Cube01Icon}
-/>
-
-<BoxLink
-  title="Limitations"
-  description="Expo Build is new and rapidly evolving, so we recommend getting familiar with the current limitations."
-  href="/build-reference/limitations"
-  Icon={Cube01Icon}
-/>
+const s = StyleSheet.create({
+  bg: { flex: 1, backgroundColor: '#F8FAFC' },
+  pad: { padding: 14, paddingBottom: 40 },
+  h1: { fontSize: 20, fontWeight: '700', color: '#0F172A' },
+  sub: { fontSize: 12, color: '#64748B', marginBottom: 10 },
+  row: { flexDirection: 'row', marginBottom: 10 },
+  btn: { flex: 1, paddingVertical: 11, borderRadius: 8, alignItems: 'center', marginRight: 6 },
+  b1: { backgroundColor: '#0F766E' }, b2: { backgroundColor: '#1E293B' }, b3: { backgroundColor: '#DC2626', marginRight: 0, flex: 0.6 },
+  bt: { color: '#FFF', fontWeight: '700', fontSize: 12 },
+  box: { backgroundColor: '#FFF', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1', marginBottom: 10 },
+  area: { minHeight: 70, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, padding: 8, marginVertical: 6, fontSize: 13 },
+  sec: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 8, marginBottom: 6 },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  ch: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16, backgroundColor: '#E2E8F0', marginRight: 6, marginBottom: 6 },
+  chOn: { backgroundColor: '#0F766E' },
+  ct: { fontSize: 12, fontWeight: '600', color: '#334155' },
+  ctOn: { color: '#FFF' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  cell: { width: '32%', backgroundColor: '#FFF', padding: 8, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#CBD5E1' },
+  cellBad: { borderColor: '#DC2626', backgroundColor: '#FEF2F2' },
+  lbl: { fontSize: 10, fontWeight: '600', color: '#475569' },
+  inp: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginTop: 2 },
+  panic: { backgroundColor: '#991B1B', padding: 10, borderRadius: 8, marginBottom: 8 },
+  der: { backgroundColor: '#E2E8F0', padding: 8, borderRadius: 8, marginBottom: 8 },
+  dt: { fontSize: 11, fontWeight: '700', color: '#1E293B' },
+  card: { padding: 10, borderRadius: 8, marginBottom: 8, borderLeftWidth: 4 },
+  cp: { backgroundColor: '#FEF2F2', borderLeftColor: '#DC2626' },
+  cw: { backgroundColor: '#FFFBEB', borderLeftColor: '#D97706' },
+  ci: { backgroundColor: '#F0FDFA', borderLeftColor: '#0F766E' },
+  nt: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  nb: { fontSize: 12, color: '#334155', marginTop: 3 },
+  nx: { fontSize: 11, fontWeight: '700', color: '#0F766E', marginTop: 4 },
+});
